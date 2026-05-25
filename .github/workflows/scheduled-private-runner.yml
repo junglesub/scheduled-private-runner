@@ -1,0 +1,52 @@
+﻿name: Scheduled private runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-private-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout private source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.PRIVATE_REPOSITORY }}
+          ref: main
+          ssh-key: ${{ secrets.PRIVATE_REPOSITORY_DEPLOY_KEY }}
+          path: private-src
+
+      - name: Restore private env file
+        working-directory: private-src
+        env:
+          PRIVATE_ENV_FILE: ${{ secrets.PRIVATE_ENV_FILE }}
+        run: |
+          if [ -z "$PRIVATE_ENV_FILE" ]; then
+            echo "Missing PRIVATE_ENV_FILE secret" >&2
+            exit 1
+          fi
+          printf '%s\n' "$PRIVATE_ENV_FILE" > .env
+          chmod 600 .env
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: private-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify source
+        working-directory: private-src
+        run: pnpm check
+
+      - name: Run scheduled task
+        working-directory: private-src
+        run: pnpm task:run
+
